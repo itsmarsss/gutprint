@@ -17,6 +17,8 @@ html {
 }
 
 body {
+    height: 100%;
+    overflow: auto;
     margin: 0;
     font-family: "Avenir Next", "Segoe UI", sans-serif;
     color: var(--text);
@@ -24,10 +26,11 @@ body {
 }
 
 .wrap {
-    max-width: 960px;
+    width: min(960px, 100%);
     margin: 0 auto;
     padding: 24px;
     display: grid;
+    align-content: start;
     gap: 18px;
 }
 
@@ -51,6 +54,38 @@ h2 {
 .sub {
     margin: 0 0 14px;
     color: var(--muted);
+}
+
+.backend-status {
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.status-label {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-checking {
+    background: #be8a23;
+}
+
+.status-online {
+    background: #2a7f62;
+}
+
+.status-offline {
+    background: #a32828;
 }
 
 .grid {
@@ -137,4 +172,17 @@ td {
 .error {
     color: #8d1f1f;
     font-weight: 600;
+}
+
+.logbox {
+    background: #f4efe4;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+    max-height: 260px;
+    overflow: auto;
+    white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.45;
 }

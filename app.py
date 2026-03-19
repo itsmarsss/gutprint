@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -30,6 +31,8 @@ DEFAULT_MARKER_FILES = [
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2GB upload limit
+RUNS: dict[str, dict] = {}
+RUNS_LOCK = threading.Lock()
 
 
 def _list_fastq_files() -> list[str]:
@@ -82,18 +85,17 @@ def _download_sra_fastq(accession: str, max_reads: int) -> tuple[Path, str]:
     raise RuntimeError(f"Download completed but FASTQ output not found for {accession}.")
 
 
-def _selected_fastq_path() -> tuple[Path, str]:
-    chosen = request.form.get("existing_fastq", "").strip()
-    ncbi_accession = request.form.get("ncbi_accession", "").strip()
-    max_reads = int(request.form.get("ncbi_max_reads", "500000"))
-    uploaded = request.files.get("fastq_upload")
+def _resolve_fastq_path(params: dict) -> tuple[Path, str]:
+    upload_rel = params.get("upload_rel", "").strip()
+    chosen = params.get("existing_fastq", "").strip()
+    ncbi_accession = params.get("ncbi_accession", "").strip()
+    max_reads = int(params.get("ncbi_max_reads", 500000))
 
-    if uploaded and uploaded.filename:
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        safe_name = _safe_uploaded_name(uploaded.filename)
-        dest = UPLOAD_DIR / f"{int(time.time())}_{uuid.uuid4().hex[:8]}_{safe_name}"
-        uploaded.save(dest)
-        return dest, str(dest.relative_to(ROOT))
+    if upload_rel:
+        path = ROOT / upload_rel
+        if not path.exists():
+            raise FileNotFoundError(f"Uploaded FASTQ not found: {upload_rel}")
+        return path, upload_rel
 
     if ncbi_accession:
         return _download_sra_fastq(ncbi_accession, max_reads=max_reads)
@@ -138,6 +140,117 @@ def _maybe_make_chart(ranked: list[tuple[str, float]], top_n: int, out_path: Pat
     return True
 
 
+def _run_init(run_id: str) -> None:
+    with RUNS_LOCK:
+        RUNS[run_id] = {
+            "status": "running",
+            "step": "Queued",
+            "logs": [],
+            "result": None,
+            "error": "",
+        }
+
+
+def _run_log(run_id: str, message: str) -> None:
+    line = f"[{time.strftime('%H:%M:%S')}] {message}"
+    with RUNS_LOCK:
+        if run_id in RUNS:
+            RUNS[run_id]["logs"].append(line)
+
+
+def _run_update(run_id: str, **kwargs) -> None:
+    with RUNS_LOCK:
+        if run_id in RUNS:
+            RUNS[run_id].update(kwargs)
+
+
+def _run_snapshot(run_id: str) -> dict | None:
+    with RUNS_LOCK:
+        run = RUNS.get(run_id)
+        if not run:
+            return None
+        return {
+            "status": run["status"],
+            "step": run["step"],
+            "logs": list(run["logs"]),
+            "result": run["result"],
+            "error": run["error"],
+        }
+
+
+def _execute_pipeline_run(run_id: str, params: dict) -> None:
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        _run_update(run_id, step="Resolving FASTQ source")
+        _run_log(run_id, "Selecting FASTQ source.")
+        fastq_path, fastq_display = _resolve_fastq_path(params)
+        _run_log(run_id, f"Using FASTQ: {fastq_display}")
+
+        min_quality = int(params.get("min_quality", 20))
+        k = int(params.get("k", 15))
+        min_score = float(params.get("min_score", 0.001))
+        top_n = int(params.get("top_n", 10))
+        chart_top_n = int(params.get("chart_top_n", 15))
+
+        marker_files = [str(ROOT / p) for p in DEFAULT_MARKER_FILES]
+        missing_markers = [p for p in marker_files if not Path(p).exists()]
+        if missing_markers:
+            raise FileNotFoundError(f"Missing marker files: {', '.join(missing_markers)}")
+
+        _run_update(run_id, step="Parsing FASTQ reads")
+        _run_log(run_id, f"Parsing FASTQ with min_quality={min_quality}.")
+        reads = parse_fastq(str(fastq_path), min_quality=min_quality)
+        _run_log(run_id, f"Reads kept: {len(reads)}")
+
+        _run_update(run_id, step="Building marker index")
+        _run_log(run_id, f"Building k-mer index with k={k}.")
+        index_data = build_index(marker_files, k=k)
+        _run_log(run_id, f"Indexed k-mers: {len(index_data)}")
+
+        _run_update(run_id, step="Scoring species")
+        _run_log(run_id, "Scoring reads against marker index.")
+        raw = score_reads(reads, index_data, k=k)
+        norm = normalize_scores(raw, index_data, k=k)
+        ranked = rank_species(norm, min_score=min_score)
+        _run_log(run_id, f"Species above threshold: {len(ranked)}")
+
+        _run_update(run_id, step="Writing outputs")
+        stamp = f"{int(time.time())}_{uuid.uuid4().hex[:6]}"
+        tsv_path = RESULTS_DIR / f"web_results_{stamp}.tsv"
+        chart_path = RESULTS_DIR / f"web_chart_{stamp}.html"
+        write_tsv(ranked, output_file=str(tsv_path))
+        chart_built = _maybe_make_chart(ranked, top_n=chart_top_n, out_path=chart_path)
+
+        top_rows = ranked[:top_n]
+        match_reads = sum(
+            1
+            for read in reads
+            for i in range(len(read) - k + 1)
+            if read[i : i + k] in index_data
+        )
+        match_rate = (match_reads / len(reads)) if reads else 0.0
+        _run_log(run_id, "Run completed successfully.")
+        _run_update(
+            run_id,
+            status="done",
+            step="Completed",
+            result={
+                "fastq": fastq_display,
+                "reads_count": len(reads),
+                "species_count": len(ranked),
+                "match_reads": match_reads,
+                "match_rate": match_rate,
+                "top_rows": top_rows,
+                "tsv_rel": str(tsv_path.relative_to(ROOT)),
+                "chart_rel": str(chart_path.relative_to(ROOT)) if chart_built else "",
+                "chart_built": chart_built,
+            },
+        )
+    except Exception as exc:
+        _run_log(run_id, f"Run failed: {exc}")
+        _run_update(run_id, status="failed", step="Failed", error=str(exc))
+
+
 @app.get("/")
 def index():
     return render_template(
@@ -154,74 +267,51 @@ def index():
     )
 
 
-@app.post("/run")
-def run_pipeline():
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+@app.get("/health")
+def health():
+    return {"status": "ok"}, 200
 
-    try:
-        fastq_path, fastq_display = _selected_fastq_path()
-        min_quality = int(request.form.get("min_quality", "20"))
-        k = int(request.form.get("k", "15"))
-        min_score = float(request.form.get("min_score", "0.001"))
-        top_n = int(request.form.get("top_n", "10"))
-        chart_top_n = int(request.form.get("chart_top_n", "15"))
 
-        marker_files = [str(ROOT / p) for p in DEFAULT_MARKER_FILES]
-        missing_markers = [p for p in marker_files if not Path(p).exists()]
-        if missing_markers:
-            raise FileNotFoundError(f"Missing marker files: {', '.join(missing_markers)}")
+@app.post("/start-run")
+def start_run():
+    uploaded = request.files.get("fastq_upload")
+    upload_rel = ""
+    if uploaded and uploaded.filename:
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        safe_name = _safe_uploaded_name(uploaded.filename)
+        dest = UPLOAD_DIR / f"{int(time.time())}_{uuid.uuid4().hex[:8]}_{safe_name}"
+        uploaded.save(dest)
+        upload_rel = str(dest.relative_to(ROOT))
 
-        reads = parse_fastq(str(fastq_path), min_quality=min_quality)
-        index_data = build_index(marker_files, k=k)
-        raw = score_reads(reads, index_data, k=k)
-        norm = normalize_scores(raw, index_data, k=k)
-        ranked = rank_species(norm, min_score=min_score)
+    params = {
+        "existing_fastq": request.form.get("existing_fastq", "").strip(),
+        "ncbi_accession": request.form.get("ncbi_accession", "").strip(),
+        "ncbi_max_reads": request.form.get("ncbi_max_reads", "500000"),
+        "min_quality": request.form.get("min_quality", "20"),
+        "k": request.form.get("k", "15"),
+        "min_score": request.form.get("min_score", "0.001"),
+        "top_n": request.form.get("top_n", "10"),
+        "chart_top_n": request.form.get("chart_top_n", "15"),
+        "upload_rel": upload_rel,
+    }
 
-        stamp = f"{int(time.time())}_{uuid.uuid4().hex[:6]}"
-        tsv_path = RESULTS_DIR / f"web_results_{stamp}.tsv"
-        chart_path = RESULTS_DIR / f"web_chart_{stamp}.html"
+    run_id = uuid.uuid4().hex
+    _run_init(run_id)
+    thread = threading.Thread(target=_execute_pipeline_run, args=(run_id, params), daemon=True)
+    thread.start()
+    return render_template("_run_status.html", run_id=run_id, run=_run_snapshot(run_id))
 
-        write_tsv(ranked, output_file=str(tsv_path))
-        chart_built = _maybe_make_chart(ranked, top_n=chart_top_n, out_path=chart_path)
 
-        top_rows = ranked[:top_n]
-        match_reads = sum(
-            1
-            for read in reads
-            for i in range(len(read) - k + 1)
-            if read[i : i + k] in index_data
-        )
-        match_rate = (match_reads / len(reads)) if reads else 0.0
-
+@app.get("/run-status/<run_id>")
+def run_status(run_id: str):
+    run = _run_snapshot(run_id)
+    if not run:
         return render_template(
-            "_results.html",
-            ok=True,
-            error="",
-            fastq=fastq_display,
-            reads_count=len(reads),
-            species_count=len(ranked),
-            match_reads=match_reads,
-            match_rate=match_rate,
-            top_rows=top_rows,
-            tsv_rel=str(tsv_path.relative_to(ROOT)),
-            chart_rel=str(chart_path.relative_to(ROOT)) if chart_built else "",
-            chart_built=chart_built,
-        )
-    except Exception as exc:
-        return render_template(
-            "_results.html",
-            ok=False,
-            error=str(exc),
-            fastq="",
-            reads_count=0,
-            species_count=0,
-            match_reads=0,
-            match_rate=0.0,
-            top_rows=[],
-            tsv_rel="",
-            chart_rel="",
-            chart_built=False,
-        ), 400
+            "_run_status.html",
+            run_id=run_id,
+            run={"status": "failed", "step": "Missing", "logs": [], "result": None, "error": "Run not found."},
+        ), 404
+    return render_template("_run_status.html", run_id=run_id, run=run)
 
 
 @app.get("/download")

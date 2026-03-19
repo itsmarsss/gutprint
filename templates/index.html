@@ -12,9 +12,14 @@
             <section class="panel">
                 <h1>gutprint</h1>
                 <p class="sub">Run the DNA scoring pipeline from a browser.</p>
+                <div class="backend-status" aria-live="polite">
+                    <span class="status-label">Backend</span>
+                    <span id="backend-dot" class="status-dot status-checking"></span>
+                    <span id="backend-text">Checking...</span>
+                </div>
 
                 <form
-                    hx-post="/run"
+                    hx-post="/start-run"
                     hx-target="#results"
                     hx-swap="innerHTML"
                     hx-indicator="#busy"
@@ -119,4 +124,22 @@
             </section>
         </main>
     </body>
+    <script>
+      async function refreshBackendStatus() {
+        const dot = document.getElementById("backend-dot");
+        const text = document.getElementById("backend-text");
+        try {
+          const resp = await fetch("/health", { cache: "no-store" });
+          if (!resp.ok) throw new Error("bad status");
+          dot.className = "status-dot status-online";
+          text.textContent = "Online";
+        } catch (_) {
+          dot.className = "status-dot status-offline";
+          text.textContent = "Offline";
+        }
+      }
+
+      refreshBackendStatus();
+      setInterval(refreshBackendStatus, 5000);
+    </script>
 </html>

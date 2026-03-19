@@ -1,0 +1,60 @@
+{% set status = run.status %}
+{% if status == "running" %}
+<div
+  hx-get="/run-status/{{ run_id }}"
+  hx-trigger="every 1s"
+  hx-target="this"
+  hx-swap="outerHTML"
+>
+{% else %}
+<div>
+{% endif %}
+  <h2>Pipeline Run</h2>
+  <p class="sub"><strong>Current step:</strong> {{ run.step }}</p>
+  <p class="sub"><strong>Status:</strong> {{ status|upper }}</p>
+
+  <h3>Logs</h3>
+  <pre class="logbox">{% for line in run.logs %}{{ line }}
+{% endfor %}</pre>
+
+  {% if status == "done" and run.result %}
+    {% set r = run.result %}
+    <hr>
+    <h3>Results</h3>
+    <p class="sub">FASTQ: <code>{{ r.fastq }}</code></p>
+    <div class="stats">
+      <div><strong>Reads kept</strong><span>{{ r.reads_count }}</span></div>
+      <div><strong>Species detected</strong><span>{{ r.species_count }}</span></div>
+      <div><strong>Reads with match</strong><span>{{ r.match_reads }}</span></div>
+      <div><strong>Match rate</strong><span>{{ "%.2f"|format(r.match_rate * 100) }}%</span></div>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/download?path={{ r.tsv_rel }}">Download TSV</a>
+      {% if r.chart_built %}
+        <a class="btn" href="/download?path={{ r.chart_rel }}">Download Chart HTML</a>
+      {% else %}
+        <span class="sub">Chart unavailable (plotly not installed).</span>
+      {% endif %}
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Species</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for species, score in r.top_rows %}
+          <tr>
+            <td>{{ species }}</td>
+            <td>{{ "%.6f"|format(score) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% elif status == "failed" %}
+    <hr>
+    <h3>Run Failed</h3>
+    <p class="error">{{ run.error }}</p>
+  {% endif %}
+</div>
