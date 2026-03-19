@@ -5,7 +5,7 @@ def score_reads(reads: list[str], index: dict, k: int = 15) -> dict[str, float]:
     """
     Score each species by how many k-mers from the reads match its markers.
     
-    Uses weighted scoring — k-mers shared across many species contribute less.
+    Uses weighted scoring: k-mers shared across many species contribute less.
     Returns a dict mapping species → confidence score.
     """
     scores = {}
@@ -34,7 +34,7 @@ def normalize_scores(scores: dict[str, float], index: dict, k: int = 15) -> dict
     This makes scores comparable across species with different marker lengths.
     
     Score of 1.0 = every possible k-mer for that species was found in the reads.
-    Score of 0.01 = 1% of k-mers found — weak signal.
+    Score of 0.01 = 1% of k-mers found: weak signal.
     """
     # count how many k-mers in the index belong to each species
     possible_kmers = {}

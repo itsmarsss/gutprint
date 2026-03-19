@@ -13,7 +13,7 @@ from flask import Flask, render_template, request
 
 from build_index import build_index
 from parse_fastq import parse_fastq
-from report import write_tsv
+from report import plot_chart, write_tsv
 from score import normalize_scores, rank_species, score_reads
 
 ROOT = Path(__file__).resolve().parent
@@ -109,37 +109,6 @@ def _resolve_fastq_path(params: dict) -> tuple[Path, str]:
     return path, chosen
 
 
-def _maybe_make_chart(ranked: list[tuple[str, float]], top_n: int, out_path: Path) -> bool:
-    try:
-        import plotly.graph_objects as go
-    except ImportError:
-        return False
-
-    top = ranked[:top_n]
-    species = [s for s, _ in top]
-    scores = [sc for _, sc in top]
-    labels = [" ".join(s.split()[:2]) for s in species]
-
-    fig = go.Figure(
-        go.Bar(
-            x=scores,
-            y=labels,
-            orientation="h",
-            marker_color="#2a7f62",
-        )
-    )
-    fig.update_layout(
-        title="gutprint detected species",
-        xaxis_title="confidence score",
-        yaxis_title="species",
-        yaxis=dict(autorange="reversed"),
-        height=500,
-        margin=dict(l=160, r=40, t=60, b=60),
-    )
-    fig.write_html(str(out_path))
-    return True
-
-
 def _run_init(run_id: str) -> None:
     with RUNS_LOCK:
         RUNS[run_id] = {
@@ -185,6 +154,12 @@ def _execute_pipeline_run(run_id: str, params: dict) -> None:
         _run_log(run_id, "Selecting FASTQ source.")
         fastq_path, fastq_display = _resolve_fastq_path(params)
         _run_log(run_id, f"Using FASTQ: {fastq_display}")
+        ncbi_accession = params.get("ncbi_accession", "").strip().upper()
+        input_source = "Existing local file"
+        if params.get("upload_rel", "").strip():
+            input_source = "Uploaded file"
+        elif ncbi_accession:
+            input_source = "NCBI SRA download"
 
         min_quality = int(params.get("min_quality", 20))
         k = int(params.get("k", 15))
@@ -219,9 +194,6 @@ def _execute_pipeline_run(run_id: str, params: dict) -> None:
         tsv_path = RESULTS_DIR / f"web_results_{stamp}.tsv"
         chart_path = RESULTS_DIR / f"web_chart_{stamp}.html"
         write_tsv(ranked, output_file=str(tsv_path))
-        chart_built = _maybe_make_chart(ranked, top_n=chart_top_n, out_path=chart_path)
-
-        top_rows = ranked[:top_n]
         match_reads = sum(
             1
             for read in reads
@@ -229,6 +201,23 @@ def _execute_pipeline_run(run_id: str, params: dict) -> None:
             if read[i : i + k] in index_data
         )
         match_rate = (match_reads / len(reads)) if reads else 0.0
+        chart_built = plot_chart(
+            ranked,
+            top_n=chart_top_n,
+            output_file=str(chart_path),
+            summary_stats={
+                "Input source": input_source,
+                "Input file": Path(fastq_display).name,
+                "NCBI accession": ncbi_accession or "n/a",
+                "Reads kept": len(reads),
+                "Reads with match": match_reads,
+                "Match rate": f"{match_rate:.2%}",
+                "k-mer size": k,
+                "Min quality": min_quality,
+                "Min score": min_score,
+            },
+        )
+        top_rows = ranked[:top_n]
         _run_log(run_id, "Run completed successfully.")
         _run_update(
             run_id,

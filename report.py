@@ -1,5 +1,7 @@
 import argparse
 import csv
+import re
+from pathlib import Path
 
 def write_tsv(ranked: list[tuple[str, float]], output_file: str = "results/results.tsv"):
     """Write ranked results to a TSV file."""
@@ -14,7 +16,7 @@ def write_tsv(ranked: list[tuple[str, float]], output_file: str = "results/resul
 def print_report(ranked: list[tuple[str, float]], top_n: int = 10):
     """Print a clean summary report to the terminal."""
     print("\n" + "=" * 50)
-    print("  gutprint — dietary DNA report")
+    print("  gutprint: dietary DNA report")
     print("=" * 50)
     print(f"  {'Species':<28} {'Score':>8}  {'Bar'}")
     print("-" * 50)
@@ -29,13 +31,19 @@ def print_report(ranked: list[tuple[str, float]], top_n: int = 10):
     print(f"  {len(ranked)} species detected above threshold")
 
 
-def plot_chart(ranked: list[tuple[str, float]], top_n: int = 15, output_file: str = "results.html"):
-    """Plot a bar chart of species scores using plotly."""
+def plot_chart(
+    ranked: list[tuple[str, float]],
+    top_n: int = 15,
+    output_file: str = "results.html",
+    summary_stats: dict | None = None,
+) -> bool:
+    """Write an HTML report with summary stats and a Plotly bar chart."""
     try:
         import plotly.graph_objects as go
+        import plotly.io as pio
     except ImportError:
-        print("plotly not installed — run: pip install plotly")
-        return
+        print("plotly not installed. run: pip install plotly")
+        return False
 
     top = ranked[:top_n]
     species = [s for s, _ in top]
@@ -52,16 +60,57 @@ def plot_chart(ranked: list[tuple[str, float]], top_n: int = 15, output_file: st
     ))
 
     fig.update_layout(
-        title="gutprint — detected food species",
+        title="gutprint: detected food species",
         xaxis_title="confidence score",
         yaxis_title="species",
         yaxis=dict(autorange="reversed"),
-        height=500,
-        margin=dict(l=160, r=40, t=60, b=60),
+        height=560,
+        margin=dict(l=180, r=40, t=70, b=60),
     )
 
-    fig.write_html(output_file)
+    max_score = ranked[0][1] if ranked else 0.0
+    mean_top = (sum(scores) / len(scores)) if scores else 0.0
+    stats = {
+        "Detected species": len(ranked),
+        "Shown in chart": len(top),
+        "Top score": f"{max_score:.6f}",
+        "Mean shown score": f"{mean_top:.6f}",
+    }
+    if summary_stats:
+        stats.update(summary_stats)
+
+    chart_html = pio.to_html(fig, full_html=False, include_plotlyjs="cdn")
+    stats_html = "".join(f"<li><strong>{k}:</strong> {v}</li>" for k, v in stats.items())
+    page_html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>gutprint chart</title>
+  <style>
+    body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8faf8; color: #18251f; }}
+    .wrap {{ max-width: 1100px; margin: 0 auto; padding: 20px; }}
+    .stats {{ background: #ffffff; border: 1px solid #d8dedb; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }}
+    .stats h2 {{ margin: 0 0 10px; font-size: 18px; }}
+    .stats ul {{ margin: 0; padding-left: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px 14px; }}
+    .chart {{ background: #ffffff; border: 1px solid #d8dedb; border-radius: 10px; padding: 8px; }}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="stats">
+      <h2>Run Summary</h2>
+      <ul>{stats_html}</ul>
+    </section>
+    <section class="chart">{chart_html}</section>
+  </main>
+</body>
+</html>
+"""
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(page_html)
     print(f"Chart saved to {output_file}")
+    return True
 
 
 def parse_args() -> argparse.Namespace:
@@ -141,10 +190,34 @@ if __name__ == "__main__":
     raw    = score_reads(reads, index, k=args.k)
     norm   = normalize_scores(raw, index, k=args.k)
     ranked = rank_species(norm, min_score=args.min_score)
+    match_reads = sum(
+        1
+        for read in reads
+        for i in range(len(read) - args.k + 1)
+        if read[i:i+args.k] in index
+    )
+    match_rate = (match_reads / len(reads)) if reads else 0.0
 
     os.makedirs("results", exist_ok=True)
+    input_name = Path(args.fastq).name
+    ncbi_match = re.search(r"(SRR\d+)", args.fastq.upper())
+    ncbi_accession = ncbi_match.group(1) if ncbi_match else "n/a"
 
     print_report(ranked, top_n=args.top_n)
     write_tsv(ranked, output_file=args.results_tsv)
     if not args.no_chart:
-        plot_chart(ranked, top_n=args.chart_top_n, output_file=args.chart_output)
+        plot_chart(
+            ranked,
+            top_n=args.chart_top_n,
+            output_file=args.chart_output,
+            summary_stats={
+                "Input file": input_name,
+                "NCBI accession": ncbi_accession,
+                "Reads kept": len(reads),
+                "Reads with match": match_reads,
+                "Match rate": f"{match_rate:.2%}",
+                "k-mer size": args.k,
+                "Min quality": args.min_quality,
+                "Min score": args.min_score,
+            },
+        )
