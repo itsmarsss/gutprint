@@ -114,7 +114,7 @@ if __name__ == "__main__":
     ]
 
     animals_path = "markers/markers_animals.tsv"
-    plants_path = "markers/markers_animals.tsv"
+    plants_path = "markers/markers_plants.tsv"
 
     os.makedirs("markers", exist_ok=True)
 
