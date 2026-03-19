@@ -62,7 +62,7 @@ def fetch_markers(
     output_file: str = "markers/markers.tsv"
 ):
     """
-    Fetch markers for each species × marker type combination.
+    Fetch markers for each species x marker type combination.
     Falls back gracefully if a species has no result for a given marker type.
     """
     if invalid := [m for m in marker_types if m not in MARKER_QUERIES]:
