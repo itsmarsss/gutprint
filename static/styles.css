@@ -1,0 +1,140 @@
+:root {
+    --bg: #f6f2e9;
+    --panel: #fffdf8;
+    --text: #1a2b24;
+    --muted: #556e63;
+    --line: #d7d2c6;
+    --accent: #2a7f62;
+    --accent-2: #134734;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: "Avenir Next", "Segoe UI", sans-serif;
+    color: var(--text);
+    background: radial-gradient(circle at 0 0, #f0e7d8, var(--bg) 40%);
+}
+
+.wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px;
+    display: grid;
+    gap: 18px;
+}
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 10px 24px rgba(17, 34, 28, 0.06);
+}
+
+.muted {
+    color: var(--muted);
+}
+
+h1,
+h2 {
+    margin: 0 0 6px;
+}
+
+.sub {
+    margin: 0 0 14px;
+    color: var(--muted);
+}
+
+.grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 14px;
+}
+
+input,
+select,
+button,
+.btn {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 14px;
+}
+
+button,
+.btn {
+    border-color: var(--accent-2);
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.actions {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.htmx-indicator {
+    display: none;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline;
+}
+
+.stats {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    margin: 10px 0 14px;
+}
+
+.stats div {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+}
+
+.stats span {
+    display: block;
+    margin-top: 4px;
+    font-weight: 700;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+
+th,
+td {
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    padding: 9px 6px;
+}
+
+.error {
+    color: #8d1f1f;
+    font-weight: 600;
+}

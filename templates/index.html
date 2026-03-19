@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>gutprint runner</title>
+        <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+        <link rel="stylesheet" href="/static/styles.css" />
+    </head>
+    <body>
+        <main class="wrap">
+            <section class="panel">
+                <h1>gutprint</h1>
+                <p class="sub">Run the DNA scoring pipeline from a browser.</p>
+
+                <form
+                    hx-post="/run"
+                    hx-target="#results"
+                    hx-swap="innerHTML"
+                    hx-indicator="#busy"
+                    enctype="multipart/form-data"
+                >
+                    <div class="grid">
+                        <label>
+                            NCBI Run Accession (optional)
+                            <input
+                                type="text"
+                                name="ncbi_accession"
+                                placeholder="SRR23930994"
+                            />
+                        </label>
+                        <label>
+                            NCBI max reads
+                            <input
+                                type="number"
+                                name="ncbi_max_reads"
+                                value="{{ defaults.ncbi_max_reads }}"
+                                min="0"
+                            />
+                        </label>
+                        <label>
+                            FASTQ (existing)
+                            <select name="existing_fastq">
+                                {% for f in fastq_files %}
+                                <option value="{{ f }}">{{ f }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>
+                            Or upload FASTQ
+                            <input
+                                type="file"
+                                name="fastq_upload"
+                                accept=".fastq,.fq,.fastq.gz,.fq.gz"
+                            />
+                        </label>
+                        <label>
+                            Min quality
+                            <input
+                                type="number"
+                                name="min_quality"
+                                value="{{ defaults.min_quality }}"
+                                min="0"
+                            />
+                        </label>
+                        <label>
+                            K-mer size
+                            <input
+                                type="number"
+                                name="k"
+                                value="{{ defaults.k }}"
+                                min="3"
+                            />
+                        </label>
+                        <label>
+                            Min score
+                            <input
+                                type="number"
+                                name="min_score"
+                                value="{{ defaults.min_score }}"
+                                step="0.0001"
+                                min="0"
+                            />
+                        </label>
+                        <label>
+                            Top N (table)
+                            <input
+                                type="number"
+                                name="top_n"
+                                value="{{ defaults.top_n }}"
+                                min="1"
+                            />
+                        </label>
+                        <label>
+                            Top N (chart)
+                            <input
+                                type="number"
+                                name="chart_top_n"
+                                value="{{ defaults.chart_top_n }}"
+                                min="1"
+                            />
+                        </label>
+                    </div>
+                    <p class="sub">
+                        FASTQ source precedence: upload > NCBI accession >
+                        existing file.
+                    </p>
+                    <div class="actions">
+                        <button type="submit">Run Analysis</button>
+                        <span id="busy" class="htmx-indicator"
+                            >Running pipeline...</span
+                        >
+                    </div>
+                </form>
+            </section>
+
+            <section id="results" class="panel muted">
+                Submit a run to view results.
+            </section>
+        </main>
+    </body>
+</html>

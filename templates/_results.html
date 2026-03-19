@@ -1,0 +1,42 @@
+{% if ok %}
+<h2>Run Complete</h2>
+<p class="sub">FASTQ: <code>{{ fastq }}</code></p>
+<div class="stats">
+    <div><strong>Reads kept</strong><span>{{ reads_count }}</span></div>
+    <div><strong>Species detected</strong><span>{{ species_count }}</span></div>
+    <div><strong>Reads with match</strong><span>{{ match_reads }}</span></div>
+    <div>
+        <strong>Match rate</strong
+        ><span>{{ "%.2f"|format(match_rate * 100) }}%</span>
+    </div>
+</div>
+
+<div class="actions">
+    <a class="btn" href="/download?path={{ tsv_rel }}">Download TSV</a>
+    {% if chart_built %}
+    <a class="btn" href="/download?path={{ chart_rel }}">Download Chart HTML</a>
+    {% else %}
+    <span class="sub">Chart unavailable (plotly not installed).</span>
+    {% endif %}
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Species</th>
+            <th>Score</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for species, score in top_rows %}
+        <tr>
+            <td>{{ species }}</td>
+            <td>{{ "%.6f"|format(score) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<h2>Run Failed</h2>
+<p class="error">{{ error }}</p>
+{% endif %}
