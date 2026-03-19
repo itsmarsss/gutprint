@@ -2,7 +2,6 @@ import urllib.request
 import urllib.parse
 import time
 import json
-import os
 
 BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 EMAIL = "your@email.com"
@@ -93,10 +92,11 @@ def fetch_markers(
 
 
 if __name__ == "__main__":
+    import os
+
     # Animals → CO1 is best
     # Plants → ITS is best
-    # You can mix and match per species if you want later
-
+    # Mix and match per species
     animals = [
         "Salmo salar",          # salmon
         "Gallus gallus",        # chicken
