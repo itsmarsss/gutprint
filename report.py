@@ -1,3 +1,4 @@
+import argparse
 import csv
 
 def write_tsv(ranked: list[tuple[str, float]], output_file: str = "results/results.tsv"):
@@ -63,28 +64,87 @@ def plot_chart(ranked: list[tuple[str, float]], top_n: int = 15, output_file: st
     print(f"Chart saved to {output_file}")
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run full gutprint pipeline and output report artifacts.")
+    parser.add_argument(
+        "--fastq",
+        default="data/SRR23930995_1.fastq",
+        help="Path to input FASTQ file.",
+    )
+    parser.add_argument(
+        "--min-quality",
+        type=int,
+        default=20,
+        help="Minimum average PHRED quality to keep reads.",
+    )
+    parser.add_argument(
+        "--marker-files",
+        nargs="+",
+        default=[
+            "markers/markers_animals.tsv",
+            "markers/markers_plants.tsv",
+        ],
+        help="One or more marker TSV files.",
+    )
+    parser.add_argument("-k", type=int, default=15, help="k-mer size.")
+    parser.add_argument(
+        "--min-score",
+        type=float,
+        default=0.001,
+        help="Minimum normalized species score to report.",
+    )
+    parser.add_argument(
+        "--top-n",
+        type=int,
+        default=10,
+        help="Number of species to print in terminal report.",
+    )
+    parser.add_argument(
+        "--chart-top-n",
+        type=int,
+        default=15,
+        help="Number of species to include in chart.",
+    )
+    parser.add_argument(
+        "--results-tsv",
+        default="results/results.tsv",
+        help="Output TSV path.",
+    )
+    parser.add_argument(
+        "--chart-output",
+        default="results.html",
+        help="Output chart HTML path.",
+    )
+    parser.add_argument(
+        "--no-chart",
+        action="store_true",
+        help="Skip chart generation.",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
     from parse_fastq import parse_fastq
     from build_index import build_index
     from score import score_reads, normalize_scores, rank_species
     import os
 
+    args = parse_args()
+
     print("Loading reads...")
-    reads = parse_fastq("data/SRR23930995_1.fastq", min_quality=20)
+    reads = parse_fastq(args.fastq, min_quality=args.min_quality)
 
     print("Building index...")
-    index = build_index([
-        "markers/markers_animals.tsv",
-        "markers/markers_plants.tsv",
-    ], k=15)
+    index = build_index(args.marker_files, k=args.k)
 
     print("Scoring...")
-    raw    = score_reads(reads, index, k=15)
-    norm   = normalize_scores(raw, index, k=15)
-    ranked = rank_species(norm)
+    raw    = score_reads(reads, index, k=args.k)
+    norm   = normalize_scores(raw, index, k=args.k)
+    ranked = rank_species(norm, min_score=args.min_score)
 
     os.makedirs("results", exist_ok=True)
 
-    print_report(ranked)
-    write_tsv(ranked)
-    plot_chart(ranked)
+    print_report(ranked, top_n=args.top_n)
+    write_tsv(ranked, output_file=args.results_tsv)
+    if not args.no_chart:
+        plot_chart(ranked, top_n=args.chart_top_n, output_file=args.chart_output)

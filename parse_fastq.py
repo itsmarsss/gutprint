@@ -1,3 +1,6 @@
+import argparse
+
+
 def parse_fastq(filepath: str, min_quality: int = 20) -> list[str]:
     """
     Parse a FASTQ file and return a list of high-quality read sequences.
@@ -36,8 +39,28 @@ def average_quality(quality_str: str) -> float:
     scores = [ord(char) - 33 for char in quality_str]
     return sum(scores) / len(scores)
 
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Parse FASTQ and keep high-quality reads.")
+    parser.add_argument(
+        "fastq",
+        nargs="?",
+        default="data/SRR23930995_1.fastq",
+        help="Path to input FASTQ file.",
+    )
+    parser.add_argument(
+        "--min-quality",
+        type=int,
+        default=20,
+        help="Minimum average PHRED quality required to keep a read.",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    reads = parse_fastq("data/SRR23930995_1.fastq", min_quality=20)
+    args = parse_args()
+    reads = parse_fastq(args.fastq, min_quality=args.min_quality)
     print(f"Total reads loaded: {len(reads)}")
-    print(f"First read: {reads[0]}")
-    print(f"Read length: {len(reads[0])}bp")
+    if reads:
+        print(f"First read: {reads[0]}")
+        print(f"Read length: {len(reads[0])}bp")

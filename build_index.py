@@ -1,3 +1,6 @@
+import argparse
+
+
 def load_markers(filepath: str) -> list[dict]:
     """
     Load marks TSV into a list of dicts.
@@ -50,10 +53,27 @@ def index_stats(index: dict) -> None:
     print(f"Shared k-mers:            {shared_kmers:,}")
     print(f"Unique k-mer ratio:       {unique_kmers/total_kmers:.1%}")
 
-if __name__ == "__main__":
-    index = build_index([
-        "markers/markers_animals.tsv",
-        "markers/markers_plants.tsv",
-    ], k=15)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build and inspect a marker k-mer index.")
+    parser.add_argument(
+        "--marker-files",
+        nargs="+",
+        default=[
+            "markers/markers_animals.tsv",
+            "markers/markers_plants.tsv",
+        ],
+        help="One or more marker TSV files.",
+    )
+    parser.add_argument(
+        "-k",
+        type=int,
+        default=15,
+        help="k-mer size to index.",
+    )
+    return parser.parse_args()
 
+
+if __name__ == "__main__":
+    args = parse_args()
+    index = build_index(args.marker_files, k=args.k)
     index_stats(index)

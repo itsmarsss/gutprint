@@ -1,3 +1,6 @@
+import argparse
+
+
 def score_reads(reads: list[str], index: dict, k: int = 15) -> dict[str, float]:
     """
     Score each species by how many k-mers from the reads match its markers.
@@ -60,23 +63,55 @@ def rank_species(normalized_scores: dict[str, float], min_score: float = 0.001) 
     ]
     return sorted(ranked, key=lambda x: x[1], reverse=True)
 
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Score species from FASTQ reads.")
+    parser.add_argument(
+        "--fastq",
+        default="data/SRR23930994_1.fastq",
+        help="Path to input FASTQ file.",
+    )
+    parser.add_argument(
+        "--min-quality",
+        type=int,
+        default=20,
+        help="Minimum average PHRED quality to keep a read.",
+    )
+    parser.add_argument(
+        "--marker-files",
+        nargs="+",
+        default=[
+            "markers/markers_animals.tsv",
+            "markers/markers_plants.tsv",
+        ],
+        help="One or more marker TSV files.",
+    )
+    parser.add_argument("-k", type=int, default=15, help="k-mer size.")
+    parser.add_argument(
+        "--min-score",
+        type=float,
+        default=0.001,
+        help="Minimum normalized score to include in ranked output.",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
     from parse_fastq import parse_fastq
     from build_index import build_index
 
+    args = parse_args()
+
     print("Loading reads...")
-    reads = parse_fastq("data/SRR23930994_1.fastq", min_quality=20)
+    reads = parse_fastq(args.fastq, min_quality=args.min_quality)
 
     print("Building index...")
-    index = build_index([
-        "markers/markers_animals.tsv",
-        "markers/markers_plants.tsv",
-    ], k=15)
+    index = build_index(args.marker_files, k=args.k)
 
     print("Scoring...")
-    raw_scores  = score_reads(reads, index, k=15)
-    norm_scores = normalize_scores(raw_scores, index, k=15)
-    ranked      = rank_species(norm_scores)
+    raw_scores  = score_reads(reads, index, k=args.k)
+    norm_scores = normalize_scores(raw_scores, index, k=args.k)
+    ranked      = rank_species(norm_scores, min_score=args.min_score)
 
     print("\nResults:")
     print(f"{'Species':<30} {'Score':>10}")
@@ -88,8 +123,8 @@ if __name__ == "__main__":
     total_reads = len(reads)
     matched_reads = sum(
         1 for read in reads
-        for i in range(len(read) - 15 + 1)
-        if read[i:i+15] in index
+        for i in range(len(read) - args.k + 1)
+        if read[i:i+args.k] in index
     )
     print(f"\nReads with at least one k-mer match: ~{matched_reads}")
-    print(f"Match rate: {matched_reads/total_reads:.2%}")
+    print(f"Match rate: {matched_reads/total_reads:.2%}" if total_reads else "Match rate: n/a")
