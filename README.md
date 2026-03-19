@@ -4,10 +4,10 @@
 esearch -db sra -query PRJNA947193 | efetch -format runinfo | head
 ```
 
-## Then pull just 50k reads from one sample
+## Then pull just 500k reads from one sample
 
 ```bash
-fastq-dump --split-files -X 50000 SRR_NUMBER_HERE -O data/
+fastq-dump --split-files -X 500000 SRR_NUMBER_HERE -O data/
 ```
 
 ## Example:
@@ -15,7 +15,7 @@ fastq-dump --split-files -X 50000 SRR_NUMBER_HERE -O data/
 ```bash
 esearch -db sra -query PRJNA947193 | efetch -format runinfo | head
 
-fastq-dump --split-files -X 50000 SRR23930995 -O
+fastq-dump --split-files -X 500000 SRR23930994 -O
 ```
 
-> Run from Experiement `SRX19741077`
+> Run from Experiement `SRX19741078`

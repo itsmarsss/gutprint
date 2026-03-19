@@ -98,11 +98,16 @@ if __name__ == "__main__":
     # You can mix and match per species if you want later
 
     animals = [
-        "Salmo salar",        # salmon
-        "Gallus gallus",      # chicken
-        "Bos taurus",         # beef
-        "Sus scrofa",         # pork
-        "Thunnus albacares",  # yellowfin tuna
+        "Salmo salar",          # salmon
+        "Gallus gallus",        # chicken
+        "Bos taurus",           # beef
+        "Sus scrofa",           # pork
+        "Thunnus albacares",    # yellowfin tuna
+        "Oncorhynchus mykiss",  # rainbow trout
+        "Gadus morhua",         # cod
+        "Ovis aries",           # lamb
+        "Meleagris gallopavo",  # turkey
+        "Penaeus vannamei",     # shrimp
     ]
 
     plants = [
@@ -111,6 +116,16 @@ if __name__ == "__main__":
         "Oryza sativa",          # rice
         "Zea mays",              # corn
         "Musa acuminata",        # banana
+        "Glycine max",           # soybean
+        "Solanum tuberosum",     # potato
+        "Brassica oleracea",     # broccoli/cabbage
+        "Daucus carota",         # carrot
+        "Capsicum annuum",       # pepper
+        "Lactuca sativa",        # lettuce
+        "Allium cepa",           # onion
+        "Lycopersicon esculentum", # tomato variant
+        "Arachis hypogaea",      # peanut
+        "Citrullus lanatus",     # watermelon
     ]
 
     animals_path = "markers/markers_animals.tsv"
